@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package coordinator;
+
+
+service Coordinator {
+  // An example RPC, to show you how to use the RPC framework.
+  // You should delete this RPC and add your own.
+  rpc Heartbeat (HeartbeatRequest) returns (HeartbeatReply) {}
+}
+
+message HeartbeatRequest {
+  uint32 worker_id = 1;
+}
+
+message HeartbeatReply {}
