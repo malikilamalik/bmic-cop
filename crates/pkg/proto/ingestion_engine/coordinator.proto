@@ -2,11 +2,39 @@ syntax = "proto3";
 
 package coordinator;
 
-
 service Coordinator {
-  // An example RPC, to show you how to use the RPC framework.
-  // You should delete this RPC and add your own.
+  rpc SubmitJob (SubmitJobRequest) returns (SubmitJobReply) {}
+  rpc PollJob (PollJobRequest) returns (PollJobReply) {}
   rpc Heartbeat (HeartbeatRequest) returns (HeartbeatReply) {}
+  rpc Register (RegisterRequest) returns (RegisterReply) {}
+  rpc GetTask (GetTaskRequest) returns (GetTaskReply) {}
+  rpc FinishTask (FinishTaskRequest) returns (FinishTaskReply) {}
+  rpc FailTask (FailTaskRequest) returns (FailTaskReply) {}
+}
+
+
+message SubmitJobRequest {
+  repeated string files = 1;
+  string output_dir = 2;
+  string app = 3;
+  uint32 n_reduce = 4;
+  string key = 5;
+  string entity = 6;
+}
+
+message SubmitJobReply {
+  uint32 job_id = 1;
+}
+
+message PollJobRequest {
+  uint32 job_id = 1;
+}
+
+message PollJobReply {
+  uint32 id = 1;
+  bool done = 2;
+  bool failed = 3;
+  repeated string errors = 4;
 }
 
 message HeartbeatRequest {
@@ -14,3 +42,55 @@ message HeartbeatRequest {
 }
 
 message HeartbeatReply {}
+
+message RegisterRequest {}
+
+message RegisterReply {
+  uint32 worker_id = 1;
+}
+
+message GetTaskRequest {
+  uint32 worker_id = 1;
+}
+
+message MapTaskAssignment {
+  uint32 task = 1;
+  uint32 worker_id = 2;
+}
+
+
+message GetTaskReply {
+  uint32 job_id = 1;
+  string output_dir = 2;
+  uint32 task = 3;
+  string file = 4;
+  bool wait = 5;
+  bool reduce = 6;
+  uint32 n_reduce = 7;
+  string app = 8;
+  string key = 9;
+  string entity = 10;
+  repeated MapTaskAssignment map_task_assignments = 11;
+}
+
+message FinishTaskRequest {
+  uint32 worker_id = 1;
+  uint32 job_id = 2;
+  uint32 task = 3;
+  bool reduce = 4;
+}
+
+message FinishTaskReply {}
+
+message FailTaskRequest {
+  uint32 worker_id = 1;
+  uint32 job_id = 2;
+  uint32 task = 3;
+  bool reduce = 4;
+  bool retry = 5;
+  string error = 6;
+}
+
+message FailTaskReply {}
+
+

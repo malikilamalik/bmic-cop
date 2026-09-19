@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.104"
 pkg = { path = "../pkg" }
+itertools = "0.14.0"
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -15,12 +16,14 @@ async-trait = {workspace = true}
 tokio-stream = {workspace = true}
 tokio-util = {workspace = true}
 tonic = {workspace = true}
+bytes = "1.12.1"
+tonic-reflection = "0.14.6"
 
 
 [[bin]]
-name = "mr-coordinator"
+name = "ie-coordinator"
 path = "src/bin/coordinator.rs"
 
 [[bin]]
-name = "mr-worker"
+name = "ie-worker"
 path = "src/bin/worker.rs"

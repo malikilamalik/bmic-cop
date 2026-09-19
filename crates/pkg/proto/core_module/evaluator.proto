@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package evaluator;
+
+
+service Evaluator {
+    rpc Evaluate (EvaluateRequest) returns (EvaluateReply) {}
+}
+
+message EvaluateRequest {
+  string id = 1;
+  string evaluator_id  = 2;
+  string repeated input = 3;
+}
+
+message EvaluateReply {}

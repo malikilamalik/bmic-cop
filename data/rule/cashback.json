@@ -1,0 +1,99 @@
+{
+  "contentType": "application/vnd.gorules.decision",
+  "nodes": [
+    {
+      "type": "inputNode",
+      "content": {
+        "schema": ""
+      },
+      "id": "d646abc8-3bb5-4636-8847-e9e31ed453cf",
+      "name": "request",
+      "position": {
+        "x": 85,
+        "y": 120
+      }
+    },
+    {
+      "type": "decisionTableNode",
+      "content": {
+        "hitPolicy": "first",
+        "rules": [
+          {
+            "_id": "b446eb68-b238-4f54-b7b7-89a838d15c5e",
+            "d36dd584-ddbf-48c6-b76b-eea81850cf80": ">= 2500000000",
+            "0ec17176-ae1a-472c-a1c8-6b3c6937bf86": ">= 5",
+            "620868d4-962e-4c6c-ad9d-ec875ee538fb": "\"CASHBACK\"",
+            "41dada4b-d8bd-4e1a-92a3-963c428022b4": "10000000"
+          },
+          {
+            "_id": "0392823d-c3ff-44d6-b25e-7fdd02fabd65",
+            "d36dd584-ddbf-48c6-b76b-eea81850cf80": ">= 1500000000",
+            "0ec17176-ae1a-472c-a1c8-6b3c6937bf86": ">=3",
+            "620868d4-962e-4c6c-ad9d-ec875ee538fb": "\"CASHBACK\"",
+            "41dada4b-d8bd-4e1a-92a3-963c428022b4": "5000000"
+          }
+        ],
+        "inputs": [
+          {
+            "id": "d36dd584-ddbf-48c6-b76b-eea81850cf80",
+            "name": "Input",
+            "field": "transaction.transaction_today.sum"
+          },
+          {
+            "id": "0ec17176-ae1a-472c-a1c8-6b3c6937bf86",
+            "name": "New field",
+            "field": "transaction.transaction_today.count"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "620868d4-962e-4c6c-ad9d-ec875ee538fb",
+            "name": "Output",
+            "field": "benefit.type"
+          },
+          {
+            "id": "41dada4b-d8bd-4e1a-92a3-963c428022b4",
+            "name": "Output",
+            "field": "benefit.amount"
+          }
+        ],
+        "passThrough": true,
+        "inputField": null,
+        "outputPath": null,
+        "executionMode": "single"
+      },
+      "id": "cb75c60e-e45f-40ee-ab69-6a410a701473",
+      "name": "cashBackDecision",
+      "position": {
+        "x": 390,
+        "y": 110
+      }
+    },
+    {
+      "type": "outputNode",
+      "content": {
+        "schema": ""
+      },
+      "id": "d1913e25-3a8e-4389-ac79-9eab3eaf5fad",
+      "name": "response",
+      "position": {
+        "x": 640,
+        "y": 105
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "979f4797-5669-4f54-957e-51823e8d39c4",
+      "sourceId": "d646abc8-3bb5-4636-8847-e9e31ed453cf",
+      "type": "edge",
+      "targetId": "cb75c60e-e45f-40ee-ab69-6a410a701473"
+    },
+    {
+      "id": "2ed34e77-af47-44b2-9ef6-fff870557733",
+      "sourceId": "cb75c60e-e45f-40ee-ab69-6a410a701473",
+      "type": "edge",
+      "targetId": "d1913e25-3a8e-4389-ac79-9eab3eaf5fad"
+    }
+  ]
+}

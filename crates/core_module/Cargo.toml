@@ -2,3 +2,26 @@
 name = "core_module"
 version = "0.1.0"
 edition = "2024"
+
+[dependencies]
+pkg = { path = "../pkg" }
+tokio = { workspace = true }
+tonic = { workspace = true }
+prost = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+sqlx = { workspace = true }
+async-trait = { workspace = true }
+dotenvy = { workspace = true }
+anyhow = "1.0"
+cron = "0.12"
+chrono-tz = "0.8"
+log = "0.4"
+mockall = "0.13"
+zen-engine = "2.0.1"
+
+
+[[bin]]
+name = "cm-scheduler"
+path = "src/bin/scheduler.rs"
