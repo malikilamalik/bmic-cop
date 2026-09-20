@@ -1,0 +1,413 @@
+openapi: 3.0.3
+info:
+  title: BMIC COP API
+  description: |
+    BMIC COP (Core & Ingestion) APIs.
+    - **Presentation (core_module)** – HTTP `GET /benefits` on `PRESENTATION_ADDR` (default `127.0.0.1:8081`).
+    - **Ingestion (ingestion_engine)** – gRPC `client.Client`/`client.Ingestion` on `INGESTION_ADDR` (default `127.0.0.1:50051`) exposed here as HTTP transcoding for OpenAPI.
+    All handlers are wrapped in `tokio::time::timeout` (`API_TIMEOUT_MS`, default `50ms`) and return `408`/`DEADLINE_EXCEEDED` on timeout.
+  version: 1.0.0
+  contact:
+    name: BMIC COP
+servers:
+  - url: http://127.0.0.1:8081
+    description: Presentation server (core_module)
+  - url: http://127.0.0.1:50051
+    description: Ingestion gRPC server (ingestion_engine) – HTTP transcoding
+  - url: http://127.0.0.1:50052
+    description: Evaluator gRPC server (core_module) – HTTP transcoding
+tags:
+  - name: presentation
+    description: Evaluator presentation – benefit query
+  - name: ingestion
+    description: Ingestion – parse job JSON and insert job/job_detail/job_file
+  - name: evaluator
+    description: Evaluator – zen_engine rule evaluation, idempotency, benefit file
+paths:
+  /benefits:
+    get:
+      tags: [presentation]
+      summary: Get benefits for customer (today only)
+      description: |
+        Checks `evaluator` is active and within `start_valid_date`/`end_valid_date`, then returns `benefit` rows where `DATE(created_at)=CURDATE()`.
+        `value` is returned raw (no JSON parsing). Returns `408` if handler exceeds `API_TIMEOUT_MS`.
+        Implemented in `crates/core_module/src/application/presentation/evaluator.rs` (`get_benefits_handler` wrapped in `tokio::time::timeout`).
+      operationId: getBenefits
+      parameters:
+        - name: customer_id
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Customer ID to filter benefits
+          example: 101
+        - name: evaluator_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: Optional evaluator filter. If provided, checks that evaluator first.
+          example: 1
+      responses:
+        '200':
+          description: Benefits for today (may be empty array)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Benefit'
+              examples:
+                found:
+                  value:
+                    - id: 4261
+                      evaluator_id: 1
+                      customer_id: 101
+                      value: { benefits: [{ type: "CASHBACK", amount: 10000 }] }
+                      description: "evaluated 1 benefits for customer 101"
+                      expired_at: null
+                      created_at: "2026-09-20T13:48:34"
+                empty:
+                  value: []
+        '403':
+          description: Evaluator not active / not yet valid / expired
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: "evaluator 99 is not active"
+        '404':
+          description: Evaluator not found
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: "evaluator 99999 not found"
+        '408':
+          description: Request timeout (`tokio::time::timeout` exceeded `API_TIMEOUT_MS`)
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: "request timeout after 50ms"
+        '500':
+          description: Internal error (DB fetch failed)
+          content:
+            text/plain:
+              schema:
+                type: string
+  /v1/ingest:
+    post:
+      tags: [ingestion]
+      summary: Ingest jobs (gRPC Client.Ingest transcoded to HTTP)
+      description: |
+        Parses JSON with top-level `job` array and inserts `job` / `job_detail` / `job_file`.
+        Proto: `crates/pkg/proto/ingestion_engine/client.proto` (`service Client { rpc Ingest }`).
+        Handler `crates/ingestion_engine/src/application/client/mod.rs::IngestionService::handle_ingest` is wrapped in `tokio::time::timeout`.
+        TimeRange: `type=between` uses `start`/`end` -> `file_start_range`/`file_end_range`; `type=named value=today` -> today 00:00-23:59 UTC.
+        Entity: `transaction` -> `transactionYYYYMMDD.txt` per day inclusive; `customer` -> `customer.txt`.
+        After DB insert, forwards `SubmitJob` to coordinator for each input.
+      operationId: ingest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestRequest'
+            examples:
+              transaction_between:
+                value:
+                  job:
+                    - evaluator_id: 1
+                      input:
+                        - key: "data_transaction_widow"
+                          entity: "transaction"
+                          time_range: { type: "between", start: "2026-09-01T00:00:00", end: "2026-09-07T23:59:59" }
+              transaction_today:
+                value:
+                  job:
+                    - evaluator_id: 12
+                      input:
+                        - key: "data_transaction_today"
+                          entity: "transaction"
+                          time_range: { type: "named", value: "today" }
+              customer:
+                value:
+                  job:
+                    - evaluator_id: 2
+                      input:
+                        - key: "data_customer_today"
+                          entity: "customer"
+                          time_range: { type: "named", value: "today" }
+      responses:
+        '200':
+          description: Ingested
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestResponse'
+        '400':
+          description: Empty job array
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '408':
+          description: Ingest timeout (`DEADLINE_EXCEEDED`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/submitJobs:
+    post:
+      tags: [ingestion]
+      summary: Alias for Ingest (gRPC Client.SubmitJobs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestRequest'
+      responses:
+        '200':
+          description: Ingested
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestResponse'
+        '408':
+          description: Timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/evaluate:
+    post:
+      tags: [evaluator]
+      summary: Evaluate (gRPC Evaluator.Evaluate transcoded)
+      description: |
+        `rpc Evaluate(EvaluateRequest) returns (EvaluateReply)` in `crates/pkg/proto/core_module/evaluator.proto`.
+        Wrapped in `tokio::time::timeout` 50ms (`API_TIMEOUT_MS`). On timeout returns `DEADLINE_EXCEEDED` / `408`.
+        Builds zen_engine input from `customer` + `transaction.transaction_today`, evaluates active rules, inserts benefit with idempotency `SHA256(customer_id-job_id-YYYY-MM-DD)`, appends `data/output/benefitYYYYMMDD.txt` (newline if exists).
+      operationId: evaluate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluateRequest'
+            examples:
+              cashback:
+                value:
+                  evaluator_id: 1
+                  customer: { customer_id: 101 }
+                  transaction: { transaction_today: { sum: 5000000000, avg: 1250000000, count: 4 } }
+                  job_id: 999
+      responses:
+        '200':
+          description: Evaluated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluateReply'
+        '408':
+          description: Evaluate timeout 50ms
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Invalid argument (evaluator_id 0)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /openapi.yaml:
+    get:
+      tags: [presentation]
+      summary: Raw OpenAPI spec
+      responses:
+        '200':
+          description: YAML spec
+          content:
+            text/yaml:
+              schema:
+                type: string
+  /docs:
+    get:
+      tags: [presentation]
+      summary: Swagger UI
+      responses:
+        '200':
+          description: HTML
+          content:
+            text/html:
+              schema:
+                type: string
+components:
+  schemas:
+    Benefit:
+      type: object
+      required: [id, evaluator_id, customer_id]
+      properties:
+        id:
+          type: integer
+          format: int64
+        evaluator_id:
+          type: integer
+          format: int64
+        customer_id:
+          type: integer
+          format: int64
+        value:
+          description: Raw JSON as stored (e.g. {"benefits":[{"type":"CASHBACK","amount":10000}]})
+          type: object
+          nullable: true
+          additionalProperties: true
+          example:
+            benefits:
+              - type: "CASHBACK"
+                amount: 10000
+        description:
+          type: string
+          nullable: true
+        expired_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+    IngestRequest:
+      type: object
+      properties:
+        job:
+          type: array
+          items:
+            $ref: '#/components/schemas/Job'
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Job'
+          description: Compat alias for job
+      example:
+        job:
+          - evaluator_id: 1
+            input:
+              - key: "data_transaction_widow"
+                entity: "transaction"
+                time_range: { type: "between", start: "2026-09-01T00:00:00", end: "2026-09-07T23:59:59" }
+    Job:
+      type: object
+      required: [evaluator_id]
+      properties:
+        evaluator_id:
+          type: integer
+          format: int64
+        input:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobInput'
+    JobInput:
+      type: object
+      required: [key, entity]
+      properties:
+        key:
+          type: string
+          example: "data_transaction_widow"
+        entity:
+          type: string
+          enum: [transaction, customer]
+          example: "transaction"
+        time_range:
+          $ref: '#/components/schemas/TimeRange'
+    TimeRange:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [between, named]
+          example: "between"
+        value:
+          type: string
+          description: For named, e.g. today
+          example: "today"
+        start:
+          type: string
+          format: date-time
+          example: "2026-09-01T00:00:00"
+        end:
+          type: string
+          format: date-time
+          example: "2026-09-07T23:59:59"
+    IngestResponse:
+      type: object
+      properties:
+        job_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        message:
+          type: string
+          example: "ingested 1 jobs"
+    EvaluateRequest:
+      type: object
+      required: [evaluator_id]
+      properties:
+        evaluator_id:
+          type: integer
+          format: int64
+        customer:
+          type: object
+          properties:
+            customer_id:
+              type: integer
+              format: int64
+        transaction:
+          type: object
+          properties:
+            transaction_today:
+              type: object
+              properties:
+                sum: { type: integer, format: int64 }
+                avg: { type: integer, format: int64 }
+                count: { type: integer, format: int64 }
+        job_id:
+          type: integer
+          format: int64
+    EvaluateReply:
+      type: object
+      properties:
+        result_json:
+          type: string
+          example: '{"evaluator_id":1,"benefits":[{"type":"CASHBACK","amount":10000}]}'
+        benefits:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvaluateBenefit'
+    EvaluateBenefit:
+      type: object
+      properties:
+        type:
+          type: string
+          example: "CASHBACK"
+        amount:
+          type: integer
+          format: int64
+    Error:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string

@@ -8,7 +8,7 @@ use crate::interface::repository::rule_repository::RuleFilter;
 /// `list` variants.
 pub fn list_rules_sql(filter: &RuleFilter) -> String {
     let mut sql = String::from(
-        "SELECT id, evaluator_id, content, input, version, description, is_active, created_at, created_by FROM rule WHERE is_active = TRUE",
+        "SELECT id, evaluator_id, content, input, version, description, is_active, CAST(created_at AS DATETIME) AS created_at, created_by FROM rule WHERE is_active = TRUE",
     );
 
     if filter.id.is_some() {
@@ -26,7 +26,7 @@ pub fn list_rules_sql(filter: &RuleFilter) -> String {
 ///
 /// Equivalent to `list_rules_sql` with only `evaluator_id` set.
 pub fn get_active_rule_by_evaluator_sql() -> &'static str {
-    "SELECT id, evaluator_id, content, input, version, description, is_active, created_at, created_by FROM rule WHERE evaluator_id = ? AND is_active = TRUE"
+    "SELECT id, evaluator_id, content, input, version, description, is_active, CAST(created_at AS DATETIME) AS created_at, created_by FROM rule WHERE evaluator_id = ? AND is_active = TRUE"
 }
 
 #[cfg(test)]

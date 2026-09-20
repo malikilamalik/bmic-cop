@@ -20,8 +20,19 @@ chrono-tz = "0.8"
 log = "0.4"
 mockall = "0.13"
 zen-engine = "2.0.1"
+tokio-task-scheduler = "1.0.0"
+tokio-cron-scheduler = "0.15.1"
+tonic-reflection = "0.14.6"
+sha2 = { workspace = true }
+axum = { workspace = true }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors"] }
 
 
 [[bin]]
 name = "cm-scheduler"
 path = "src/bin/scheduler.rs"
+
+[[bin]]
+name = "presentation"
+path = "src/bin/presentation.rs"

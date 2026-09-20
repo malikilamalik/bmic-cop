@@ -139,10 +139,42 @@ pub struct App {
     pub process_output_fn: ProcessOutputFn,
 }
 
+pub fn customer_map_fn(kv: KeyValue) -> MapOutput {
+    // customer.txt: id,name,account_number -> emit key=id with 32-byte aggregate value
+    let s = String::from_utf8_lossy(&kv.value).to_string();
+    let mut out: Vec<anyhow::Result<KeyValue>> = Vec::new();
+    for line in s.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let cid = line.split(',').next().unwrap_or("").trim();
+        if cid.is_empty() {
+            continue;
+        }
+        // emit 32-byte value like transaction_summary does (sum 0, count 1)
+        let mut vb = BytesMut::with_capacity(32);
+        vb.put_u64(0);
+        vb.put_u64(1);
+        vb.put_u64(0);
+        vb.put_u64(0);
+        out.push(Ok(KeyValue::new(
+            Bytes::from(cid.to_string().into_bytes()),
+            vb.freeze(),
+        )));
+    }
+    Ok(Box::new(out.into_iter()))
+}
+
 pub fn get_app(name: &str) -> Option<App> {
-    match name {
-        "benefit_evaluator" | "benefit-evaluator" => Some(App {
+    match name.to_lowercase().as_str() {
+        "transaction"  => Some(App {
             map_fn: transaction_summary::map,
+            reduce_fn: transaction_summary::reduce,
+            process_output_fn: transaction_summary::process_output,
+        }),
+        "customer" => Some(App {
+            map_fn: customer_map_fn,
             reduce_fn: transaction_summary::reduce,
             process_output_fn: transaction_summary::process_output,
         }),
@@ -293,29 +325,17 @@ impl Worker {
         } else {
             reply.n_reduce
         };
-        let app = if reply.app.is_empty() {
-            "benefit-evaluator".to_string()
+        let app = if reply.entity.is_empty() {
+            "transaction".to_string()
         } else {
-            reply.app.clone()
+            reply.entity.clone()
         };
 
         if reply.reduce {
             // Reduce phase: aggregate intermediate data and write to output_dir
             // Dispatch via App for benefit_evaluator: map/reduce/process_output
-            let aux = Bytes::new();
             let app_entry = get_app(&app);
             let reduce_fn: ReduceFn = app_entry.as_ref().map(|a| a.reduce_fn).unwrap_or(dummy_reduce);
-            let process_output_fn: ProcessOutputFn = app_entry
-                .as_ref()
-                .map(|a| a.process_output_fn)
-                .unwrap_or(|kva: Box<dyn Iterator<Item = KeyValue>>| {
-                    let mut s = String::new();
-                    for kv in kva {
-                        s.push_str(&String::from_utf8_lossy(&kv.value));
-                        s.push('\n');
-                    }
-                    Ok(s)
-                });
             match self
                 .reduce(
                     reduce_fn,
@@ -562,9 +582,14 @@ impl Worker {
         }
 
         let buf = writer.finish().freeze();
-        let name = format!("{}/mr-out-{}", output_dir, task);
-        let mut out_file = tokio::fs::File::create(name).await?;
+        let base = output_dir.trim_end_matches('/');
+        let dir = format!("{}/{}", base, job_id);
+        // ensure output directory exists for this job (e.g., data/output/5)
+        let _ = tokio::fs::create_dir_all(&dir).await;
+        let name = format!("{}/mr-out-{}", dir, task);
+        let mut out_file = tokio::fs::File::create(&name).await?;
         out_file.write_all(&buf).await?;
+        log::info!("Worker {} wrote reduce output to {}", self.id, name);
         Ok(None)
     }
 
@@ -620,7 +645,7 @@ impl Worker {
             writers.push(writer);
         }
 
-        // Read file content with dynamic fallback (handles bare filenames like "transaction20260915.txt")
+        // Read file content with dynamic fallback (handles bare filenames like "transaction20260915.txt" and customer)
         let file_bytes: Vec<u8> = match tokio::fs::read(&file).await {
             Ok(b) => b,
             Err(_) => {
@@ -637,6 +662,12 @@ impl Worker {
                     format!("./data/transaction/{}", file),
                     format!("{}/data/transaction/{}", workspace_root, basename),
                     format!("{}/data/transaction/{}", workspace_root, file),
+                    format!("data/customer/{}", basename),
+                    format!("data/customer/{}", file),
+                    format!("./data/customer/{}", basename),
+                    format!("./data/customer/{}", file),
+                    format!("{}/data/customer/{}", workspace_root, basename),
+                    format!("{}/data/customer/{}", workspace_root, file),
                     format!("{}/{}", workspace_root, file),
                     format!("{}/{}", workspace_root, basename),
                 ];
@@ -768,4 +799,39 @@ async fn connect(id: u32, initial_worker_port: u16) -> Result<worker_client::Wor
     let client =
         worker_client::WorkerClient::connect(format!("http://127.0.0.1:{}", get_port(id, initial_worker_port))).await?;
     Ok(client)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+
+    #[test]
+    fn customer_map_emits_customer_ids() {
+        let content = "1,Yudi Kusuma,34476595022\n2,Kurnia Santoso,83037622931\n";
+        let kv = KeyValue { key: Bytes::from("customer.txt"), value: Bytes::from(content) };
+        let out: Vec<_> = customer_map_fn(kv).unwrap().collect::<Result<Vec<_>, _>>().unwrap();
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].key, Bytes::from("1"));
+        assert_eq!(out[1].key, Bytes::from("2"));
+        // value should be 32 bytes (sum/count encoding)
+        assert_eq!(out[0].value.len(), 32);
+    }
+
+    #[test]
+    fn transaction_map_emits_ref_id() {
+        let content = "1,101,2026-09-14T03:21:15Z,1000,Debit,desc\n";
+        let kv = KeyValue { key: Bytes::from("tx.txt"), value: Bytes::from(content) };
+        let out: Vec<_> = transaction_map_fn(kv).unwrap().collect::<Result<Vec<_>, _>>().unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].key, Bytes::from("101"));
+    }
+
+    #[test]
+    fn get_app_dispatches_customer_and_transaction() {
+        assert!(get_app("transaction").is_some());
+        assert!(get_app("customer").is_some());
+        assert!(get_app("CUSTOMER").is_some());
+        assert!(get_app("unknown_app").is_none());
+    }
 }

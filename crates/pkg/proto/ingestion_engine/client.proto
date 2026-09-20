@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package client;
+
+// Primary ingestion service – now named Client as requested (was Ingestion)
+// Scheduler (core_module) calls rpc Ingest via pkg::proto::client::client_client::ClientClient
+service Client {
+  // Primary method matching JSON example with top-level "job" array
+  rpc Ingest(IngestRequest) returns (IngestResponse) {}
+  // Alias for compatibility (some callers may use Submit / IngestJobs naming)
+  rpc SubmitJobs(IngestRequest) returns (IngestResponse) {}
+}
+
+// Backward-compat alias – keep Ingestion service so existing ingestion_server clients still work
+service Ingestion {
+  rpc Ingest(IngestRequest) returns (IngestResponse) {}
+  rpc SubmitJobs(IngestRequest) returns (IngestResponse) {}
+}
+
+message IngestRequest {
+  // JSON example uses key "job": [{evaluator_id, input:[...]}, ...]
+  // We expose both "job" (singular) and "jobs" (plural) for compatibility;
+  // server merges them.
+  repeated Job job = 1;
+  repeated Job jobs = 2;
+}
+
+message Job {
+  uint64 evaluator_id = 1;
+  repeated JobInput input = 2;
+}
+
+message JobInput {
+  string key = 1;
+  string entity = 2;
+  TimeRange time_range = 3;
+}
+
+message TimeRange {
+  string type = 1;   // "between" | "named"
+  string value = 2;  // for named: e.g. "today"
+  string start = 3;  // for between: ISO8601 e.g. "2026-09-01T00:00:00"
+  string end = 4;    // for between: ISO8601 e.g. "2026-09-07T23:59:59"
+}
+
+message IngestResponse {
+  repeated uint64 job_ids = 1;
+  string message = 2;
+}

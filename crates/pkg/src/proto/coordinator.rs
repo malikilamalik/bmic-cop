@@ -13,6 +13,10 @@ pub struct SubmitJobRequest {
     pub key: ::prost::alloc::string::String,
     #[prost(string, tag = "6")]
     pub entity: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "7")]
+    pub evaluator_id: u64,
+    #[prost(uint64, tag = "8")]
+    pub ingestion_job_id: u64,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SubmitJobReply {

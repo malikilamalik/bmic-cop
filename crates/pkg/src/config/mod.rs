@@ -1,4 +1,6 @@
 pub mod coordinator;
+pub mod evaluator;
+pub mod ingestion;
 pub mod mysql;
 pub mod scheduler;
 pub mod worker;

@@ -18,7 +18,7 @@ fn list_sql_with_evaluator_id_and_is_active() {
     let sql = list_rules_sql(&f);
     assert!(sql.contains("is_active = TRUE"));
     assert!(sql.contains("evaluator_id = ?"));
-    assert_eq!(sql, "SELECT id, evaluator_id, content, input, version, description, is_active, created_at, created_by FROM rule WHERE is_active = TRUE AND evaluator_id = ?");
+    assert_eq!(sql, "SELECT id, evaluator_id, content, input, version, description, is_active, CAST(created_at AS DATETIME) AS created_at, created_by FROM rule WHERE is_active = TRUE AND evaluator_id = ?");
 }
 
 #[test]
@@ -40,7 +40,7 @@ fn get_active_rule_by_evaluator_sql_is_correct() {
     let sql = get_active_rule_by_evaluator_sql();
     assert_eq!(
         sql,
-        "SELECT id, evaluator_id, content, input, version, description, is_active, created_at, created_by FROM rule WHERE evaluator_id = ? AND is_active = TRUE"
+        "SELECT id, evaluator_id, content, input, version, description, is_active, CAST(created_at AS DATETIME) AS created_at, created_by FROM rule WHERE evaluator_id = ? AND is_active = TRUE"
     );
 }
 

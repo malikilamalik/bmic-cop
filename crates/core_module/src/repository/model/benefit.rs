@@ -17,6 +17,7 @@ pub struct BenefitModel {
     pub value: Option<Value>,
     pub description: Option<String>,
     pub expired_at: Option<NaiveDateTime>,
+    #[sqlx(rename = "created_at")]
     pub created_at: Option<NaiveDateTime>,
 }
 

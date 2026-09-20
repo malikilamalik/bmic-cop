@@ -1,0 +1,24 @@
+openapi: 3.0.3
+info:
+  title: BMIC COP Ingestion API
+  version: 1.0.0
+  description: Ingestion gRPC transcoded – see root openapi.yaml
+servers:
+  - url: http://127.0.0.1:50051
+paths:
+  /v1/ingest:
+    post:
+      summary: Ingest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200': { description: OK }
+        '408': { description: Timeout via tokio::time::timeout (API_TIMEOUT_MS) }
+  /v1/submitJobs:
+    post:
+      summary: Alias
+      responses:
+        '200': { description: OK }

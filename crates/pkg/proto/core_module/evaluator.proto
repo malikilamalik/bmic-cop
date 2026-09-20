@@ -2,15 +2,37 @@ syntax = "proto3";
 
 package evaluator;
 
-
 service Evaluator {
-    rpc Evaluate (EvaluateRequest) returns (EvaluateReply) {}
+  rpc Evaluate (EvaluateRequest) returns (EvaluateReply) {}
 }
 
 message EvaluateRequest {
-  string id = 1;
-  string evaluator_id  = 2;
-  string repeated input = 3;
+  int64 evaluator_id = 1;
+  Customer customer = 2;
+  Transaction transaction = 3;
+  uint64 job_id = 4;
 }
 
-message EvaluateReply {}
+message Customer {
+  int64 customer_id = 1;
+}
+
+message Transaction {
+  TransactionData transaction_today = 1;
+}
+
+message TransactionData {
+  int64 sum = 1;
+  int64 avg = 2;
+  int64 count = 3;
+}
+
+message EvaluateReply {
+  string result_json = 1;
+  repeated Benefit benefits = 2;
+}
+
+message Benefit {
+  string type = 1;
+  int64 amount = 2;
+}

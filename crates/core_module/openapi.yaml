@@ -1,0 +1,25 @@
+openapi: 3.0.3
+info:
+  title: BMIC COP Presentation API
+  version: 1.0.0
+  description: Presentation benefit query – see root openapi.yaml for full spec
+servers:
+  - url: http://127.0.0.1:8081
+paths:
+  /benefits:
+    get:
+      summary: Get benefits
+      parameters:
+        - name: customer_id
+          in: query
+          required: true
+          schema: { type: integer }
+        - name: evaluator_id
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }
+        '403': { description: Forbidden }
+        '404': { description: Not found }
+        '408': { description: Timeout via tokio::time::timeout }

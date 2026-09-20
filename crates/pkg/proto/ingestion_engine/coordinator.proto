@@ -20,6 +20,8 @@ message SubmitJobRequest {
   uint32 n_reduce = 4;
   string key = 5;
   string entity = 6;
+  uint64 evaluator_id = 7;
+  uint64 ingestion_job_id = 8;
 }
 
 message SubmitJobReply {

@@ -5,7 +5,9 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-sqlx = { version = "0.9", features = ["mysql", "runtime-tokio", "chrono", "macros"] }
+axum = { version = "0.7", features = ["json"] }
+sha2 = "0.10"
+sqlx = { version = "0.9", features = ["mysql", "runtime-tokio", "chrono", "macros", "tls-rustls"] }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1.19"
 tokio-util = "0.7.19"

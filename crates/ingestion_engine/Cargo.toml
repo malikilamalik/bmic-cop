@@ -27,3 +27,7 @@ path = "src/bin/coordinator.rs"
 [[bin]]
 name = "ie-worker"
 path = "src/bin/worker.rs"
+
+[[bin]]
+name = "client"
+path = "src/bin/client.rs"
